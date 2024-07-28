@@ -4,6 +4,10 @@ from django.views.decorators.http import require_POST
 import json
 import base64
 from .utils import *
+from .serializers import *
+from django.db.models import OuterRef, Subquery, Max
+from rest_framework.generics import ListAPIView
+
 
 @csrf_exempt
 @require_POST
@@ -87,3 +91,148 @@ class ValveControl(APIView):
             return Response({"message": "Request successful"}, status=status.HTTP_200_OK)
         else:
             return Response({"error": "Failed to send data to device"}, status=response.status_code)
+        
+
+
+
+
+#################### PONER SALDO ##############################
+
+
+class SetBalance(APIView):
+    def post(self, request, *args, **kwargs):
+        deveui = request.data.get('deveui')
+        balance = request.data.get('balance')
+
+
+        if deveui is None or balance is None:
+            return Response({"error": "Missing 'deveui' or 'balance'"}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        try:
+            balance = float(balance)  # Intenta convertir balance a entero
+        except ValueError:
+            return Response({"error": "Balance must be an float"}, status=status.HTTP_400_BAD_REQUEST)
+
+        hex_values_specific = generate_balance(balance)
+        bytes_from_hex_specific = bytes.fromhex(hex_values_specific)
+
+        # Encode these bytes to base64
+        payload_data = base64.b64encode(bytes_from_hex_specific)
+
+        payload_data=payload_data.decode('utf-8')
+       
+        print(payload_data)
+        # Construir el cuerpo del POST request
+        json_data = {
+            "queueItem": {
+                "confirmed": False,
+                "data": payload_data,
+                "fCntDown": 0,
+                "fPort": 1,
+                "isPending": True
+            }
+        }
+        headers = {
+            'accept': 'application/json',
+            'Grpc-Metadata-Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6ImM4NmRiM2VmLTZhY2QtNDE1NS1hZmQ1LTAzNzAyNjM2NmZmMCIsInR5cCI6ImtleSJ9.1erH-6qO_DZjRahATSQulG-cbpbTyxtLB5Xg40G86vI',
+            'Content-Type': 'application/json'
+        }
+
+        # Realizar la solicitud POST
+        response = requests.post(f'https://lora.datalandia.site/api/devices/{deveui}/queue', json=json_data, headers=headers)
+
+        # Comprobar si la solicitud fue exitosa
+        if response.status_code == 200:
+            return Response({"message": "Request successful"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Failed to send data to device"}, status=response.status_code)
+        
+
+#################### PONER CONSUMO / CALIBRAR ##############################
+
+
+class SetConsumption(APIView):
+    def post(self, request, *args, **kwargs):
+        deveui = request.data.get('deveui')
+        consumption = request.data.get('consumption')
+
+
+        if deveui is None or consumption is None:
+            return Response({"error": "Missing 'deveui' or 'consumption'"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            consumption = float(consumption)  # Intenta convertir consumption a entero
+            if consumption < 0:
+                raise ValueError("Consumption must be a positive float")  # Asegura que sea positivo
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        hex_values_specific = generate_consumption(consumption)
+        bytes_from_hex_specific = bytes.fromhex(hex_values_specific)
+
+        # Encode these bytes to base64
+        payload_data = base64.b64encode(bytes_from_hex_specific)
+        payload_data=payload_data.decode('utf-8')
+       
+
+        # Construir el cuerpo del POST request
+        json_data = {
+            "queueItem": {
+                "confirmed": False,
+                "data": payload_data,
+                "fCntDown": 0,
+                "fPort": 1,
+                "isPending": True
+            }
+        }
+        headers = {
+            'accept': 'application/json',
+            'Grpc-Metadata-Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6ImM4NmRiM2VmLTZhY2QtNDE1NS1hZmQ1LTAzNzAyNjM2NmZmMCIsInR5cCI6ImtleSJ9.1erH-6qO_DZjRahATSQulG-cbpbTyxtLB5Xg40G86vI',
+            'Content-Type': 'application/json'
+        }
+
+        # Realizar la solicitud POST
+        response = requests.post(f'https://lora.datalandia.site/api/devices/{deveui}/queue', json=json_data, headers=headers)
+
+        # Comprobar si la solicitud fue exitosa
+        if response.status_code == 200:
+            return Response({"message": "Request successful"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Failed to send data to device"}, status=response.status_code)
+        
+
+
+#################################### ESTADO MEDIDORES ##########################################
+
+class LatestGasMeterDataView(APIView):
+    def get(self, request):
+        # First, get the latest timestamp for each dev_eui
+        latest_per_dev_eui = GasMeterData.objects.values('dev_eui').annotate(
+            latest_timestamp=Max('timestamp')
+        )
+
+        # Now, query all GasMeterData where the dev_eui and timestamp match these latest timestamps
+        latest_entries = GasMeterData.objects.filter(
+            dev_eui__in=[item['dev_eui'] for item in latest_per_dev_eui],
+            timestamp__in=[item['latest_timestamp'] for item in latest_per_dev_eui]
+        )
+
+        # Serializing the data
+        serializer = GasMeterDataSerializer(latest_entries, many=True)
+        return Response(serializer.data)
+    
+
+
+#################################### Histórico de estados de un medidor ############################
+
+class GasMeterDataListView(ListAPIView):
+    serializer_class = GasMeterDataSerializer
+
+    def get_queryset(self):
+        """
+        This view should return a list of all the GasMeterData
+        for the currently authenticated user's dev_eui.
+        """
+        deveui = self.kwargs['deveui']  # Get the 'deveui' from the URL parameter
+        return GasMeterData.objects.filter(dev_eui=deveui)

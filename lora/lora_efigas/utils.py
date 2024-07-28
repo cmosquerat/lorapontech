@@ -1,4 +1,5 @@
 from .models import *
+import struct
 
 def parse_gas_meter_message(message):
     # Convert the hexadecimal string to bytes
@@ -46,4 +47,45 @@ def save_gas_meter_data(parsed_message, dev_eui):
 
 
 
+################ CONSUMO-CALIBRACIÓN #####################
+
+
+def generate_consumption(cubic_meters):
+    # Command code for SBAL
+    cmd_code = 0x05  
+    
+    # Frame identifier for downlink (assumed value, please replace with the correct one if different)
+    frame_id = 0x01  # Assuming this is a downlink frame
+    
+    # Convert cubic meters to the unit of 0.001 cubic meters and cast to a signed integer
+    purchase_value = int(cubic_meters * 1000)  # Convert m^3 to 0.001 m^3 units
+    
+    # Pack the purchase value as a 4-byte signed integer in little endian
+    arg_payload = struct.pack('<i', purchase_value)
+    
+    # Construct the complete payload
+    payload = struct.pack('<B', cmd_code) + arg_payload + struct.pack('<B', frame_id)
+    
+    return payload.hex()
+
+
+################# SALDO ####################
+
+def generate_balance(cubic_meters):
+    # Command code for SBAL
+    cmd_code = 0x0c  # Assuming 0x0C is the command for SBAL
+    
+    # Frame identifier for downlink (assumed value, please replace with the correct one if different)
+    frame_id = 0x01  # Assuming this is a downlink frame
+    
+    # Convert cubic meters to the unit of 0.001 cubic meters and cast to a signed integer
+    purchase_value = int(cubic_meters * 1000)  # Convert m^3 to 0.001 m^3 units
+    
+    # Pack the purchase value as a 4-byte signed integer in little endian
+    arg_payload = struct.pack('<i', purchase_value)
+    
+    # Construct the complete payload
+    payload = struct.pack('<B', cmd_code) + arg_payload + struct.pack('<B', frame_id)
+    
+    return payload.hex()
 
