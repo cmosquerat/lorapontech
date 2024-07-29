@@ -4,7 +4,7 @@ import struct
 def parse_gas_meter_message(message):
     # Convert the hexadecimal string to bytes
     message_bytes = bytes.fromhex(message)
-
+    parsed_data={}
     # Extract data according to specified byte positions and lengths
     cmd = message_bytes[0]
     accumulated_flow = int.from_bytes(message_bytes[1:5], byteorder='little')
@@ -20,15 +20,15 @@ def parse_gas_meter_message(message):
 
     # Create a dictionary to return the parsed data
     parsed_data = {
-        'Command': cmd,
-        'Accumulated Flow (L)': accumulated_flow,
-        'Total Flow (L)': total_flow,
-        'Meter Status': meter_status,
-        'Alarm': alarm,
-        'Battery Voltage (V)': battery_voltage,
-        'RSSI': rssi,
-        'SNR': snr
-    }
+            'Command': cmd,
+            'Accumulated Flow (L)': accumulated_flow,
+            'Total Flow (L)': total_flow,
+            'Meter Status': meter_status,
+            'Alarm': alarm,
+            'Battery Voltage (V)': battery_voltage,
+            'RSSI': rssi,
+            'SNR': snr
+        }
 
     return parsed_data
 
@@ -89,3 +89,23 @@ def generate_balance(cubic_meters):
     
     return payload.hex()
 
+################ CAMBIO DE TIEMPO EN LOS REPORTES #####################
+
+
+def set_time_repports(time):
+    cmd_code = 0x06
+    frame_id = 0x01 
+    arg_payload = struct.pack('<H', int(time))
+    payload = struct.pack('<B', cmd_code) + arg_payload+ struct.pack('<B', frame_id)
+        # Convert the byte data to a hex string
+    hex_payload = payload.hex()
+    print(hex_payload)
+    return hex_payload
+
+################ TEMPERATURA #####################
+def query_temp():
+    cmd_code = 0x0d
+    frame_id = 0x01 
+    payload = struct.pack('<B', cmd_code) + struct.pack('<B', frame_id)
+    hex_payload = payload.hex()
+    return hex_payload
